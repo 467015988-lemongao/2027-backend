@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2027元旦活动 - 报名统计后台</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      min-height: 100vh;
+    }
+    .header {
+      background: linear-gradient(135deg, #c0261f, #e64333);
+      color: #fff;
+      padding: 20px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .header .sub { font-size: 13px; opacity: .85; margin-top: 4px; }
+    .refresh-info { font-size: 12px; opacity: .85; }
+    .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      border-top: 4px solid #e64333;
+    }
+    .card .label { font-size: 13px; color: #999; }
+    .card .value { font-size: 34px; font-weight: 700; color: #c0261f; margin-top: 6px; }
+    .card.a200 { border-top-color: #f59e0b; }
+    .card.a200 .value { color: #d97706; }
+    .card.a300 { border-top-color: #10b981; }
+    .card.a300 .value { color: #059669; }
+
+    .panel {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      margin-top: 20px;
+    }
+    .panel h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333; }
+    .panel h2 .hint { font-size: 12px; color: #999; font-weight: 400; margin-left: 8px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+    th { color: #666; font-weight: 600; background: #fafafa; }
+    tbody tr:hover { background: #fff8f7; }
+    .tag {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .tag.a200 { background: #fef3c7; color: #b45309; }
+    .tag.a300 { background: #d1fae5; color: #047857; }
+    .empty { text-align: center; color: #bbb; padding: 36px 0; font-size: 14px; }
+
+    .bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .bar-bg { flex: 1; height: 10px; background: #f0f0f0; border-radius: 5px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #f59e0b, #e64333); }
+    .bar-num { min-width: 30px; text-align: right; color: #666; font-size: 13px; }
+
+    .actions { display: flex; gap: 12px; align-items: center; }
+    button {
+      background: #c0261f;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button:hover { background: #a91f1a; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .filter-select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>2027元旦活动 · 报名统计后台</h1>
+      <div class="sub">消费满200送50 / 满300送100</div>
+    </div>
+    <div class="actions">
+      <span class="refresh-info" id="lastUpdate">加载中...</span>
+      <select class="filter-select" id="typeFilter">
+        <option value="ALL">全部档位</option>
+        <option value="A200">满200送50</option>
+        <option value="A300">满300送100</option>
+      </select>
+      <button id="refreshBtn" onclick="refresh()">刷新数据</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="cards">
+      <div class="card">
+        <div class="label">总报名人数</div>
+        <div class="value" id="totalCount">-</div>
+      </div>
+      <div class="card a200">
+        <div class="label">满200送50 报名</div>
+        <div class="value" id="a200Count">-</div>
+      </div>
+      <div class="card a300">
+        <div class="label">满300送100 报名</div>
+        <div class="value" id="a300Count">-</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>每日报名统计<span class="hint">按日期展示不同活动档位的报名人数</span></h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:130px">日期</th>
+            <th>报名分布</th>
+            <th style="width:90px">满200送50</th>
+            <th style="width:90px">满300送100</th>
+            <th style="width:80px">合计</th>
+          </tr>
+        </thead>
+        <tbody id="dailyBody">
+          <tr><td colspan="5" class="empty">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>报名明细<span class="hint">最近 200 条，手机号与姓名已脱敏</span></h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:190px">报名时间</th>
+            <th style="width:110px">姓名</th>
+            <th style="width:150px">手机号</th>
+            <th style="width:120px">活动档位</th>
+          </tr>
+        </thead>
+        <tbody id="recordsBody">
+          <tr><td colspan="4" class="empty">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+    const fmtTime = iso => {
+      const d = new Date(iso)
+      const p = n => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+    }
+
+    let statsCache = null
+    let recordsCache = []
+
+    async function fetchJSON(url) {
+      const r = await fetch(url)
+      if (!r.ok) throw new Error(`请求失败: ${r.status}`)
+      return r.json()
+    }
+
+    function renderStats(stats, filter) {
+      document.getElementById('totalCount').textContent = stats.total
+      document.getElementById('a200Count').textContent = stats.byType.A200 || 0
+      document.getElementById('a300Count').textContent = stats.byType.A300 || 0
+
+      const rows = stats.daily.filter(d => filter === 'ALL' || d[filter] > 0)
+      const maxTotal = Math.max(1, ...stats.daily.map(d => d.total))
+
+      const dailyBody = document.getElementById('dailyBody')
+      if (rows.length === 0) {
+        dailyBody.innerHTML = '<tr><td colspan="5" class="empty">暂无报名数据</td></tr>'
+        return
+      }
+      dailyBody.innerHTML = rows.map(d => `
+        <tr>
+          <td>${esc(d.date)}</td>
+          <td>
+            <div class="bar-wrap">
+              <div class="bar-bg"><div class="bar-fill" style="width:${(d.total / maxTotal * 100).toFixed(1)}%"></div></div>
+              <div class="bar-num">${d.total}</div>
+            </div>
+          </td>
+          <td><span class="tag a200">${d.A200 || 0}</span></td>
+          <td><span class="tag a300">${d.A300 || 0}</span></td>
+          <td><strong>${d.total}</strong></td>
+        </tr>`).join('')
+    }
+
+    function renderRecords(records, filter) {
+      const list = records.filter(r => filter === 'ALL' || r.activityType === filter)
+      const body = document.getElementById('recordsBody')
+      if (list.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" class="empty">暂无报名记录</td></tr>'
+        return
+      }
+      body.innerHTML = list.map(r => `
+        <tr>
+          <td>${esc(fmtTime(r.createdAt))}</td>
+          <td>${esc(r.name)}</td>
+          <td>${esc(r.phone)}</td>
+          <td><span class="tag ${r.activityType}">${esc(r.activityLabel)}</span></td>
+        </tr>`).join('')
+    }
+
+    async function refresh() {
+      const btn = document.getElementById('refreshBtn')
+      btn.disabled = true
+      try {
+        const [stats, records] = await Promise.all([
+          fetchJSON('/api/stats'),
+          fetchJSON('/api/records')
+        ])
+        statsCache = stats
+        recordsCache = records.records || []
+        const filter = document.getElementById('typeFilter').value
+        renderStats(statsCache, filter)
+        renderRecords(recordsCache, filter)
+        document.getElementById('lastUpdate').textContent =
+          '更新于 ' + new Date().toLocaleTimeString('zh-CN')
+      } catch (e) {
+        document.getElementById('lastUpdate').textContent = '加载失败：' + e.message
+      } finally {
+        btn.disabled = false
+      }
+    }
+
+    document.getElementById('typeFilter').addEventListener('change', e => {
+      if (statsCache) {
+        renderStats(statsCache, e.target.value)
+        renderRecords(recordsCache, e.target.value)
+      }
+    })
+
+    refresh()
+    setInterval(refresh, 30000)
+  </script>
+</body>
+</html>

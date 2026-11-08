@@ -1,0 +1,15 @@
+{
+  "name": "newyear-2027-server",
+  "version": "1.0.0",
+  "description": "2027元旦活动后端服务（报名API + 统计页面）",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
