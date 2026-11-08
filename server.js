@@ -14,6 +14,16 @@ const ACTIVITY_TYPES = {
   A300: { id: 'A300', label: '满300送100', threshold: 300, bonus: 100 }
 }
 
+// 省级行政区（用于报名省份校验与统计归类）
+const PROVINCES = [
+  '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江',
+  '上海', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南',
+  '湖北', '湖南', '广东', '广西', '海南', '重庆', '四川', '贵州',
+  '云南', '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆',
+  '香港', '澳门', '台湾'
+]
+const UNKNOWN_PROVINCE = '未知'
+
 const DATA_DIR = path.join(__dirname, 'data')
 const DATA_FILE = path.join(DATA_DIR, 'signups.json')
 
@@ -90,9 +100,9 @@ app.get('/api/activities', (req, res) => {
 // 报名
 app.post('/api/signup', (req, res) => {
   const log = createReqLogger('SIGNUP')
-  const { name, phone, activityType } = req.body || {}
+  const { name, phone, activityType, province } = req.body || {}
   // 入口日志：手机号脱敏；若后续无任何出口日志，说明 handler 中途异常退出
-  log('REQ', { phone: maskPhone((phone || '').trim()), activityType: activityType || null })
+  log('REQ', { phone: maskPhone((phone || '').trim()), activityType: activityType || null, province: province || null })
 
   const errors = {}
   const trimmedName = (name || '').trim()
@@ -104,6 +114,10 @@ app.post('/api/signup', (req, res) => {
   else if (!/^1[3-9]\d{9}$/.test(trimmedPhone)) errors.phone = '请输入正确的11位手机号'
 
   if (!ACTIVITY_TYPES[activityType]) errors.activityType = '请选择活动档位'
+
+  const trimmedProvince = (province || '').trim()
+  if (!trimmedProvince) errors.province = '请选择省份'
+  else if (!PROVINCES.includes(trimmedProvince)) errors.province = '请选择正确的省份'
 
   // 分支：参数校验失败
   if (Object.keys(errors).length > 0) {
@@ -122,6 +136,7 @@ app.post('/api/signup', (req, res) => {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
     name: trimmedName,
     phone: trimmedPhone,
+    province: trimmedProvince,
     activityType,
     createdAt: new Date().toISOString()
   }
@@ -131,6 +146,7 @@ app.post('/api/signup', (req, res) => {
   log('SUCCESS', {
     id: record.id,
     phone: maskPhone(trimmedPhone),
+    province: trimmedProvince,
     activityType,
     totalSignups: data.signups.length
   })
@@ -152,12 +168,13 @@ function localDate(iso) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-// 统计：按日期分组的各档位报名人数 + 汇总
+// 统计：按日期分组的各档位报名人数 + 汇总 + 按省份分布
 app.get('/api/stats', (req, res) => {
   const log = createReqLogger('STATS')
   const data = loadData()
   const byDate = {}
   const byType = { A200: 0, A300: 0 }
+  const provinceMap = {}
 
   for (const s of data.signups) {
     const date = localDate(s.createdAt)
@@ -166,17 +183,25 @@ app.get('/api/stats', (req, res) => {
     byDate[date][s.activityType]++
     byDate[date].total++
     if (byType[s.activityType] !== undefined) byType[s.activityType]++
+
+    // 历史数据可能没有省份字段，统一归入「未知」
+    const province = s.province || UNKNOWN_PROVINCE
+    if (!provinceMap[province]) provinceMap[province] = { province, A200: 0, A300: 0, total: 0 }
+    provinceMap[province][s.activityType] = (provinceMap[province][s.activityType] || 0) + 1
+    provinceMap[province].total++
   }
 
   const daily = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date))
-  // 出口日志：汇总人数与日期维度，costMs 主要反映读文件+聚合耗时
-  log('OK', { total: data.signups.length, byType, days: daily.length })
+  const byProvince = Object.values(provinceMap).sort((a, b) => b.total - a.total || a.province.localeCompare(b.province))
+  // 出口日志：汇总人数、日期与省份维度，costMs 主要反映读文件+聚合耗时
+  log('OK', { total: data.signups.length, byType, days: daily.length, provinces: byProvince.length })
 
   res.json({
     ok: true,
     total: data.signups.length,
     byType,
-    daily
+    daily,
+    byProvince
   })
 })
 
@@ -190,6 +215,7 @@ app.get('/api/records', (req, res) => {
       id: s.id,
       name: maskName(s.name),
       phone: maskPhone(s.phone),
+      province: s.province || UNKNOWN_PROVINCE,
       activityType: s.activityType,
       activityLabel: ACTIVITY_TYPES[s.activityType]?.label || s.activityType,
       createdAt: s.createdAt
